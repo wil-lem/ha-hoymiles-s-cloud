@@ -2,9 +2,9 @@
   "domain": "hoymiles_cloud",
   "name": "Hoymiles S-Cloud",
   "version": "0.1.0",
-  "documentation": "https://github.com/yourusername/hoymiles_cloud",
+  "documentation": "https://github.com/wil-lem/ha-hoymiles-s-cloud",
   "dependencies": [],
-  "codeowners": ["@yourgithubusername"],
+  "codeowners": ["@will-lem"],
   "requirements": ["requests", "cachetools", "PyYAML"],
   "iot_class": "cloud_push",
   "config_flow": true
