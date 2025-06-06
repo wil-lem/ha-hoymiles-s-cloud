@@ -24,7 +24,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entities = []
     for station in stations:
-        name = station.get("name")
+        name = f"Hoymiles S-Cloud Station {station.get('name', 'Unknown')}"
         sid = station.get("id")
         station_id_str = f"hoymiles_station_{sid}"
 
