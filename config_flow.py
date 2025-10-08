@@ -12,7 +12,8 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .hoymiles_client import HoymilesClient
-from . import DOMAIN
+
+DOMAIN = "hoymiles_nimbus"
 
 
 class CannotConnect(HomeAssistantError):
@@ -44,7 +45,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         await hass.async_add_executor_job(client.login)
         
         # Return info that you want to store in the config entry.
-        return {"title": "Hoymiles S-Cloud"}
+        return {"title": "Hoymiles Nimbus"}
     except Exception as ex:
         # You can be more specific about different types of connection errors
         if "401" in str(ex) or "authentication" in str(ex).lower():

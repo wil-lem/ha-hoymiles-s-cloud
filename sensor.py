@@ -5,7 +5,9 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import UnitOfPower, UnitOfEnergy, UnitOfElectricPotential, UnitOfElectricCurrent
 
 from .hoymiles_client import HoymilesClient
-from . import DOMAIN
+from .device_registry import create_station_device_info, create_module_device_info
+
+DOMAIN = "hoymiles_nimbus"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,16 +70,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     system_coordinator = HoymilesSystemCoordinator(hass, client, system)
     
     for station in stations:
-        name = f"Hoymiles S-Cloud Station {station.get('name', 'Unknown')}"
+        station_name = station.get('name', 'Unknown')
         sid = station.get("id")
-        station_id_str = f"hoymiles_station_{sid}"
-
-        device_info = {
-            "identifiers": {(station_id_str,)},
-            "name": name,
-            "manufacturer": "Hoymiles",
-            "model": "X-Series",
-        }
+        device_info = create_station_device_info(sid, station_name)
+        name = device_info["name"]
 
         entities.append(HoymilesStationPowerSensor(client, name, sid, device_info))
         entities.append(HoymilesStationEnergySensor(client, name, sid, device_info))
@@ -85,20 +81,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     # Add individual solar module sensors
     for station in system:
         station_name = station.name
-        station_id_str = f"hoymiles_station_{station.station_id}"
-        
+        sid = station.station_id
+        station_identifier = f"hoymiles_station_{station.station_id}"
+
         for microinverter in station.microinverters:
             for module in microinverter.modules:
                 module_name = f"{station_name} Panel {module.id}"
                 
                 # Create device info for the solar module
-                module_device_info = {
-                    "identifiers": {(f"hoymiles_module_{module.id}",)},
-                    "name": f"Solar Panel {module.id}",
-                    "manufacturer": "Hoymiles",
-                    "model": "Solar Module",
-                    "via_device": (station_id_str,),  # Link to the station device
-                }
+                module_device_info = create_module_device_info(module.id, station_identifier)
                 
                 # Add power, voltage, and current sensors for each module
                 entities.append(HoymilesSolarModulePowerSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
@@ -113,7 +104,7 @@ class HoymilesStationPowerSensor(SensorEntity):
         self._sid = sid
         self._attr_name = f"{name} Current Power"
         self._attr_native_unit_of_measurement = UnitOfPower.WATT
-        self._attr_unique_id = f"hoymiles_scloud_{sid}_power"
+        self._attr_unique_id = f"hoymiles_nimbus_{sid}_power"
         self._attr_device_class = "power"
         self._attr_device_info = device_info
         self._state = None
@@ -142,7 +133,7 @@ class HoymilesStationEnergySensor(SensorEntity):
         self._sid = sid
         self._attr_name = f"{name} Daily Energy"
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-        self._attr_unique_id = f"hoymiles_scloud_{sid}_energy"
+        self._attr_unique_id = f"hoymiles_nimbus_{sid}_energy"
         self._attr_device_class = "energy"
         self._attr_state_class = "total_increasing"
         self._attr_icon = "mdi:solar-power"
@@ -174,7 +165,7 @@ class HoymilesSolarModulePowerSensor(SensorEntity):
         self._module_id = module.id
         self._attr_name = f"{name} Power"
         self._attr_native_unit_of_measurement = UnitOfPower.WATT
-        self._attr_unique_id = f"hoymiles_scloud_module_{module.id}_power"
+        self._attr_unique_id = f"hoymiles_nimbus_module_{module.id}_power"
         self._attr_device_class = "power"
         self._attr_state_class = "measurement"
         self._attr_device_info = device_info
@@ -222,7 +213,7 @@ class HoymilesSolarModuleVoltageSensor(SensorEntity):
         self._module_id = module.id
         self._attr_name = f"{name} Voltage"
         self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_unique_id = f"hoymiles_scloud_module_{module.id}_voltage"
+        self._attr_unique_id = f"hoymiles_nimbus_module_{module.id}_voltage"
         self._attr_device_class = "voltage"
         self._attr_state_class = "measurement"
         self._attr_device_info = device_info
@@ -273,7 +264,7 @@ class HoymilesSolarModuleCurrentSensor(SensorEntity):
         self._module_id = module.id
         self._attr_name = f"{name} Current"
         self._attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-        self._attr_unique_id = f"hoymiles_scloud_module_{module.id}_current"
+        self._attr_unique_id = f"hoymiles_nimbus_module_{module.id}_current"
         self._attr_device_class = "current"
         self._attr_state_class = "measurement"
         self._attr_device_info = device_info

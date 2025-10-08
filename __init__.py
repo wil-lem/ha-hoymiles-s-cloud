@@ -9,7 +9,7 @@ from homeassistant.const import Platform
 
 from .hoymiles_client import HoymilesClient
 
-DOMAIN = "hoymiles_cloud"
+DOMAIN = "hoymiles_nimbus"
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER]
 
 _LOGGER = logging.getLogger(__name__)

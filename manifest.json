@@ -1,6 +1,6 @@
 {
-  "domain": "hoymiles_cloud",
-  "name": "Hoymiles S-Cloud",
+  "domain": "hoymiles_nimbus",
+  "name": "Hoymiles Nimbus",
   "version": "0.2.0",
   "documentation": "https://github.com/wil-lem/ha-hoymiles-s-cloud",
   "issue_tracker": "https://github.com/wil-lem/ha-hoymiles-s-cloud/issues",
@@ -9,5 +9,6 @@
   "requirements": ["requests>=2.25.0", "cachetools>=4.2.0", "PyYAML>=6.0"],
   "iot_class": "cloud_polling",
   "config_flow": true,
-  "integration_type": "device"
+  "integration_type": "device",
+  "icon": "mdi:solar-panel"
 }

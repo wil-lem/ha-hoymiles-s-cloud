@@ -3,7 +3,9 @@ from datetime import datetime, timedelta
 from homeassistant.components.number import NumberEntity
 from homeassistant.const import CONF_SCAN_INTERVAL
 from .hoymiles_client import HoymilesClient
-from . import DOMAIN
+from .device_registry import create_station_device_info
+
+DOMAIN = "hoymiles_nimbus"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,16 +27,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entities = []
     for station in stations:
-        name = f"Hoymiles S-Cloud Station {station.get('name', 'Unknown')}"
+        station_name = station.get('name', 'Unknown')
         sid = station.get("id")
-        station_id_str = f"hoymiles_station_{sid}"
-
-        device_info = {
-            "identifiers": {(station_id_str,)},
-            "name": name,
-            "manufacturer": "Hoymiles",
-            "model": "X-Series",
-        }
+        device_info = create_station_device_info(sid, station_name)
+        name = device_info["name"]
 
         entities.append(HoymilesMicroInverterLevel(client, name, sid, device_info))
 
