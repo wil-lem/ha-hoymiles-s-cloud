@@ -1,35 +1,69 @@
+import datetime
 import requests
 import yaml
 import logging
 import hashlib
 from cachetools import TTLCache, cached
 
+# Handle imports for both standalone and Home Assistant contexts
+try:
+    from .classes.micro_inverter import Microinverter
+    from .classes.solar_module import SolarModule
+    from .classes.station import Station
+    from .parsers import ProtobufParser
+except ImportError:
+    from classes.micro_inverter import Microinverter
+    from classes.solar_module import SolarModule
+    from classes.station import Station
+    from parsers import ProtobufParser
+
 _LOGGER = logging.getLogger(__name__)
 
 
 class HoymilesClient:
+    """
+    Client for interacting with Hoymiles S-Cloud API.
+    
+    This class provides methods organized into different categories:
+    - Authentication: login, token management
+    - HTTP helpers: internal request methods
+    - Data fetching: retrieve information from API
+    - Control operations: send commands to devices
+    - System mapping: build system hierarchy
+    - Utilities: helper functions
+    """
+    
     def __init__(self, username, password, base_url):
-        
-        # Set up logging
+        """Initialize the Hoymiles client with credentials and base URL."""
         _LOGGER.debug("Initializing HoymilesClient")
-
-
+        
         self.username = username
         self.password = password
         self.base_url = base_url
-
+        
+        # API endpoint URIs
         self.uris = {
             "login": "iam/pub/0/auth/login",
             "user_info": "iam/api/1/user/me",
             "count_station_data": "pvm-data/api/0/station/data/count_station_real_data",
             "find": "pvm/api/0/station/find",
+            "select_by_station": "pvm/api/0/dev/micro/select_by_station",
+            "micro_find": "pvm/api/0/dev/micro/find",
+            "module_details": "pvm-data/api/0/module/data/find_details",
+            "select_all_arrays": "pvm/api/0/dev/array_v3/select_all",
+            "down_module_day_data": "pvm-data/api/0/module/data/down_module_day_data",
+            "down_station_day_data": "pvm-data/api/0/station/down_station_day_data",
         }
         
         self.token = None
         self.cache = TTLCache(maxsize=100, ttl=300)
 
+    # ============================================================================
+    # HTTP HELPER METHODS
+    # ============================================================================
 
-    def _post_request(self, uri, payload=None, headers=None, use_auth=True, binary=False):
+
+    def _post_request(self, uri, payload=None, headers=None, use_auth=True, binary=False, response_type='json'):
         """Helper method to make POST requests."""
         url = f"{self.base_url}{uri}"
         if headers is None:
@@ -53,6 +87,9 @@ class HoymilesClient:
             
             # Attempt to parse the response as JSON
             try:
+                if response_type == 'protobuf' and binary:
+                    parser = ProtobufParser(response.content)
+                    return parser
                 response_data = response.json()
                 logging.debug(f"Response JSON: {response_data}")
                 return response_data
@@ -92,6 +129,10 @@ class HoymilesClient:
             _LOGGER.error("Failed to parse response as JSON")
             return None
 
+    # ============================================================================
+    # AUTHENTICATION METHODS
+    # ============================================================================
+
     def get_password_hash(self):
       password = self.password.encode('utf-8')
       passwordHash = hashlib.md5(password)
@@ -116,10 +157,52 @@ class HoymilesClient:
           return True
       else:
           raise Exception("Login failed: Token not found in response")
-      
+
+    # ============================================================================
+    # DATA FETCHING METHODS
+    # ============================================================================
+
+    @cached(cache=TTLCache(maxsize=100, ttl=300))
+    def select_by_station(self, station_id):
+        """Select microinverters by station ID."""
+        payload = {
+            "sid": station_id,
+            "page": 1,
+            "page_size": 1000,
+            "show_warn": 0
+        }
+        response = self._post_request(self.uris['select_by_station'], payload=payload)
+
+        return response.get("data", {})
+    
+    @cached(cache=TTLCache(maxsize=100, ttl=300))
+    def micro_find(self, micro_id, station_id):
+        """Find a microinverter by its ID."""
+        payload = {
+            "id": micro_id,
+            "sid": station_id,
+        }
+        response = self._post_request(self.uris['micro_find'], payload=payload)
+        return response.get('data', {})
+
+    @cached(cache=TTLCache(maxsize=100, ttl=300))
+    def module_details(self, station_id, micro_id, micro_sn, port, time):
+        """Retrieve module details by its ID."""
+        payload = {
+            "sid": station_id,
+            "mi_id": micro_id,
+            "mi_sn": micro_sn,
+            "port": port,
+            "time": time,
+            "warn_code": 1,
+        }
+
+        response = self._post_request(self.uris['module_details'], payload=payload)
+        return response.get('data', {})
+
     @cached(cache=TTLCache(maxsize=100, ttl=300))
     def get_user_info(self):
-        """Retrieve user information from Hoymiles S-Cloud."""
+        """Retrieve user information from Hoymiles S-Cloud. [UNUSED]"""
         return self._post_request(self.uris['user_info'])
 
     @cached(cache=TTLCache(maxsize=100, ttl=300))
@@ -153,20 +236,6 @@ class HoymilesClient:
         }
         return self._post_request(self.uris['count_station_data'], payload=payload)
 
-    def put_command(self,action, dev_sn, dev_type, dtu_sn):
-        uri = 'pvm-ctl/api/0/dev/command/put'
-        {
-            "action": action,
-            "dev_sn": dev_sn,
-            "dev_type": dev_type,
-            "dtu_sn": dtu_sn
-        }
-    
-    def turn_off_microinverter(self, dev_sn, dev_type, dtu_sn):
-        """Turn off the microinverter."""
-        self.put_command(7, dev_sn, 3, dtu_sn)
-    
-    
     @cached(cache=TTLCache(maxsize=100, ttl=300))
     def findStation(self, sid):
         """Find a station by its ID."""
@@ -174,9 +243,26 @@ class HoymilesClient:
             "id": sid,
         }
         response = self._post_request(self.uris['find'], payload=payload)
-
         return response.get('data', {})
+
+    def down_module_day_data(self, sid, date):
+        """Download module day data for a specific date."""
+        payload = {
+            "sid": sid,
+            "date": date,
+        }
+        response = self._post_request(self.uris['down_module_day_data'], payload=payload, response_type='protobuf', binary=True)
+        return response
+
+    # ============================================================================
+    # CONTROL OPERATIONS
+    # ============================================================================
+
     
+    def turn_off_microinverter(self, dev_sn, dev_type, dtu_sn):
+        """Turn off the microinverter. [UNUSED]"""
+        self.put_command(7, dev_sn, 3, dtu_sn)
+
     def set_power_limit(self, sid, power_limit):
         """Set the power limit for a microinverter."""
         power_limit = min(100, int(power_limit))
@@ -194,4 +280,55 @@ class HoymilesClient:
         
         uri = 'pvm-ctl/api/0/dev/command/put'
         return self._put_request(uri, payload=payload)
+
+    # ============================================================================
+    # SYSTEM MAPPING AND DATA PROCESSING
+    # ============================================================================
     
+    @cached(cache=TTLCache(maxsize=100, ttl=300))
+    def map_system(self):
+        """Build a hierarchical system map of stations, microinverters, and modules."""
+        stations = self.select_by_page("station")
+        system = []
+        if not stations:
+            _LOGGER.warning("No stations found.")
+            return system
+        
+        for station_data in stations:
+            station = Station(station_data.get("id"), station_data.get("name"))
+            
+            # Fetch microinverters for the station
+            microinverters = self.select_by_station(station.station_id)
+            if not microinverters:
+                _LOGGER.warning(f"No microinverters found for station ID {station.station_id}.")
+                continue
+                
+            for micro_data in microinverters.get("list", []):
+                micro_id = micro_data.get("id")
+                sn = micro_data.get("sn")
+                microinverter = Microinverter(micro_id, sn)
+                station.add_microinverter(microinverter)
+                
+                # Fetch module details for each port
+                micro_details = self.micro_find(micro_id, station.station_id)
+                for port_info in micro_details.get("layout_list", []):
+                    module_id = f"{sn}-{port_info.get('port')}"
+                    port = port_info.get("port")
+                    x = port_info.get("x")
+                    y = port_info.get("y")
+                    solar_module = SolarModule(module_id, port, x, y)
+                    microinverter.add_module(solar_module)
+                    
+            system.append(station)
+        return system
+    
+    
+    def fill_system_data(self, system, date=None):
+        """Fill system hierarchy with actual performance data for a given date."""
+        if date is None:
+            date = datetime.datetime.now().strftime("%Y-%m-%d")
+        _LOGGER.debug(f"Filling system data for date: {date}")
+        for station in system:
+            sid = station.station_id
+            data = self.down_module_day_data(sid, date)
+            station.set_data(data)

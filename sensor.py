@@ -2,14 +2,51 @@
 
 import logging
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import UnitOfPower, UnitOfEnergy  # Updated imports for units
+from homeassistant.const import UnitOfPower, UnitOfEnergy, UnitOfElectricPotential, UnitOfElectricCurrent
 
 from .hoymiles_client import HoymilesClient
+from . import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class HoymilesSystemCoordinator:
+    """Coordinator to manage system data updates for all module sensors."""
+    
+    def __init__(self, hass, client, initial_system):
+        self._hass = hass
+        self._client = client
+        self._system = initial_system
+        self._last_update = None
+        
+    async def get_system(self):
+        """Get the current system data, updating if needed."""
+        import datetime
+        now = datetime.datetime.now()
+        
+        # Update every 30 seconds to avoid too frequent API calls
+        if (self._last_update is None or 
+            (now - self._last_update).total_seconds() > 30):
+            
+            self._system = await self._hass.async_add_executor_job(self._client.map_system)
+            await self._hass.async_add_executor_job(self._client.fill_system_data, self._system)
+            self._last_update = now
+            
+        return self._system
+    
+    def find_module(self, station_id, module_id):
+        """Find a specific module in the system."""
+        for station in self._system:
+            if station.station_id == station_id:
+                for microinverter in station.microinverters:
+                    for module in microinverter.modules:
+                        if module.id == module_id:
+                            return module
+        return None
+
+
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    client = hass.data["hoymiles_cloud"][config_entry.entry_id]
+    client = hass.data[DOMAIN][config_entry.entry_id]
 
     # Ensure the client is authenticated
     # _LOGGER.debug("Logging into Hoymiles S-Cloud...")
@@ -19,9 +56,17 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     # _LOGGER.debug("Fetching stations from Hoymiles S-Cloud...")
     stations = await hass.async_add_executor_job(client.select_by_page, "station")
 
+    # Build system map with individual modules
+    system = await hass.async_add_executor_job(client.map_system)
+    await hass.async_add_executor_job(client.fill_system_data, system)
+
     # _LOGGER.debug(f"Found {len(stations)} stations")
 
     entities = []
+    
+    # Create a shared system coordinator for all module sensors
+    system_coordinator = HoymilesSystemCoordinator(hass, client, system)
+    
     for station in stations:
         name = f"Hoymiles S-Cloud Station {station.get('name', 'Unknown')}"
         sid = station.get("id")
@@ -36,6 +81,29 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         entities.append(HoymilesStationPowerSensor(client, name, sid, device_info))
         entities.append(HoymilesStationEnergySensor(client, name, sid, device_info))
+
+    # Add individual solar module sensors
+    for station in system:
+        station_name = station.name
+        station_id_str = f"hoymiles_station_{station.station_id}"
+        
+        for microinverter in station.microinverters:
+            for module in microinverter.modules:
+                module_name = f"{station_name} Panel {module.id}"
+                
+                # Create device info for the solar module
+                module_device_info = {
+                    "identifiers": {(f"hoymiles_module_{module.id}",)},
+                    "name": f"Solar Panel {module.id}",
+                    "manufacturer": "Hoymiles",
+                    "model": "Solar Module",
+                    "via_device": (station_id_str,),  # Link to the station device
+                }
+                
+                # Add power, voltage, and current sensors for each module
+                entities.append(HoymilesSolarModulePowerSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
+                entities.append(HoymilesSolarModuleVoltageSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
+                entities.append(HoymilesSolarModuleCurrentSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
 
     async_add_entities(entities)
 
@@ -97,3 +165,153 @@ class HoymilesStationEnergySensor(SensorEntity):
             # Convert to kWh
             # Assuming the value is in Wh, convert to kWh
             self._state = float(val) / 1000
+
+
+class HoymilesSolarModulePowerSensor(SensorEntity):
+    def __init__(self, coordinator, name, station_id, module, device_info):
+        self._coordinator = coordinator
+        self._station_id = station_id
+        self._module_id = module.id
+        self._attr_name = f"{name} Power"
+        self._attr_native_unit_of_measurement = UnitOfPower.WATT
+        self._attr_unique_id = f"hoymiles_scloud_module_{module.id}_power"
+        self._attr_device_class = "power"
+        self._attr_state_class = "measurement"
+        self._attr_device_info = device_info
+        self._attr_icon = "mdi:solar-panel"
+        self._state = None
+
+    @property
+    def native_value(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        """Return additional state attributes."""
+        module = self._coordinator.find_module(self._station_id, self._module_id)
+        if module:
+            attrs = {
+                "module_id": module.id,
+                "port": module.port,
+                "position_x": module.x,
+                "position_y": module.y,
+            }
+            if module.getLatestTime():
+                attrs["last_updated"] = module.getLatestTime()
+            return attrs
+        return {}
+
+    async def async_update(self):
+        # Get updated system data through coordinator
+        system = await self._coordinator.get_system()
+        
+        # Find our specific module in the updated system
+        module = self._coordinator.find_module(self._station_id, self._module_id)
+        if module:
+            power = module.getCurrentPower()
+            self._state = power if power is not None else 0
+        else:
+            # Module not found, set to 0
+            self._state = 0
+
+
+class HoymilesSolarModuleVoltageSensor(SensorEntity):
+    def __init__(self, coordinator, name, station_id, module, device_info):
+        self._coordinator = coordinator
+        self._station_id = station_id
+        self._module_id = module.id
+        self._attr_name = f"{name} Voltage"
+        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+        self._attr_unique_id = f"hoymiles_scloud_module_{module.id}_voltage"
+        self._attr_device_class = "voltage"
+        self._attr_state_class = "measurement"
+        self._attr_device_info = device_info
+        self._attr_icon = "mdi:flash"
+        self._state = None
+
+    @property
+    def native_value(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        """Return additional state attributes."""
+        module = self._coordinator.find_module(self._station_id, self._module_id)
+        if module:
+            attrs = {
+                "module_id": module.id,
+                "port": module.port,
+                "position_x": module.x,
+                "position_y": module.y,
+            }
+            if module.getLatestTime():
+                attrs["last_updated"] = module.getLatestTime()
+            return attrs
+        return {}
+
+    async def async_update(self):
+        # Get updated system data through coordinator
+        system = await self._coordinator.get_system()
+        
+        # Find our specific module in the updated system
+        module = self._coordinator.find_module(self._station_id, self._module_id)
+        if module:
+            latest_data_point = module.getLatestDataPoint()
+            if latest_data_point and latest_data_point.volt is not None:
+                self._state = float(latest_data_point.volt)
+            else:
+                self._state = 0
+        else:
+            # Module not found, set to 0
+            self._state = 0
+
+
+class HoymilesSolarModuleCurrentSensor(SensorEntity):
+    def __init__(self, coordinator, name, station_id, module, device_info):
+        self._coordinator = coordinator
+        self._station_id = station_id
+        self._module_id = module.id
+        self._attr_name = f"{name} Current"
+        self._attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+        self._attr_unique_id = f"hoymiles_scloud_module_{module.id}_current"
+        self._attr_device_class = "current"
+        self._attr_state_class = "measurement"
+        self._attr_device_info = device_info
+        self._attr_icon = "mdi:current-ac"
+        self._state = None
+
+    @property
+    def native_value(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        """Return additional state attributes."""
+        module = self._coordinator.find_module(self._station_id, self._module_id)
+        if module:
+            attrs = {
+                "module_id": module.id,
+                "port": module.port,
+                "position_x": module.x,
+                "position_y": module.y,
+            }
+            if module.getLatestTime():
+                attrs["last_updated"] = module.getLatestTime()
+            return attrs
+        return {}
+
+    async def async_update(self):
+        # Get updated system data through coordinator
+        system = await self._coordinator.get_system()
+        
+        # Find our specific module in the updated system
+        module = self._coordinator.find_module(self._station_id, self._module_id)
+        if module:
+            latest_data_point = module.getLatestDataPoint()
+            if latest_data_point and latest_data_point.ampere is not None:
+                self._state = float(latest_data_point.ampere)
+            else:
+                self._state = 0
+        else:
+            # Module not found, set to 0
+            self._state = 0

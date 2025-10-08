@@ -1,11 +1,13 @@
 {
   "domain": "hoymiles_cloud",
   "name": "Hoymiles S-Cloud",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "documentation": "https://github.com/wil-lem/ha-hoymiles-s-cloud",
+  "issue_tracker": "https://github.com/wil-lem/ha-hoymiles-s-cloud/issues",
   "dependencies": [],
-  "codeowners": ["@will-lem"],
-  "requirements": ["requests", "cachetools", "PyYAML"],
-  "iot_class": "cloud_push",
-  "config_flow": true
+  "codeowners": ["@wil-lem"],
+  "requirements": ["requests>=2.25.0", "cachetools>=4.2.0", "PyYAML>=6.0"],
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "integration_type": "device"
 }
