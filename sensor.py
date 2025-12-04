@@ -77,6 +77,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         entities.append(HoymilesStationPowerSensor(client, name, sid, device_info))
         entities.append(HoymilesStationEnergySensor(client, name, sid, device_info))
+        entities.append(HoymilesStationRatioSensor(client, name, sid, device_info))
 
     # Add individual solar module sensors
     for station in system:
@@ -157,6 +158,46 @@ class HoymilesStationEnergySensor(SensorEntity):
             # Assuming the value is in Wh, convert to kWh
             self._state = float(val) / 1000
 
+class HoymilesStationRatioSensor(SensorEntity):
+    def __init__(self, client, name, sid, device_info):
+        self._client = client
+        self._sid = sid
+        self._attr_name = f"{name} Performance Ratio"
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_unique_id = f"hoymiles_nimbus_{sid}_performance_ratio"
+        self._attr_device_class = "performance_ratio"
+        self._attr_state_class = "measurement"
+        self._attr_icon = "mdi:percent"
+        self._attr_device_info = device_info
+        self._state = None
+
+    @property
+    def native_value(self):
+        return self._state
+
+    async def async_update(self):
+        data = await self.hass.async_add_executor_job(self._client.count_station_real_data, self._sid)
+        capacity = data.get("data", {}).get("capacitor", 0)
+        current_power = data.get("data", {}).get("real_power", 0)
+
+        if capacity is None:
+            _LOGGER.warning(f"Received None value for capacity data for station {self._sid}")
+            self._state = 0
+            return
+        if current_power is None:
+            _LOGGER.warning(f"Received None value for current power data for station {self._sid}")
+            self._state = 0
+            return
+        if capacity == 0:
+            self._state = 0
+        else:
+            # Make sure we're dealing with floats
+            capacity = float(capacity)
+            current_power = float(current_power)
+            capacity_kw = capacity * 1000  # Convert kW to W
+            ratio = (current_power / capacity_kw) * 100
+            self._state = round(ratio, 2)
+        
 
 class HoymilesSolarModulePowerSensor(SensorEntity):
     def __init__(self, coordinator, name, station_id, module, device_info):
