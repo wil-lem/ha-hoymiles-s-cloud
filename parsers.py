@@ -274,8 +274,11 @@ class ProtobufParser:
     def decode_data_point(data_point: list):
         decoded = []
         for i, val in enumerate(data_point):
-            if val < 10:
+            if isinstance(val, (int, float)) and val < 10:
                 decoded.append(val)
-            else:
+            elif isinstance(val, (int, float)):
                 decoded.append(struct.unpack('<f', struct.pack('<I', val))[0])
+            else:
+                # Skip non-numeric values
+                continue
         return decoded
