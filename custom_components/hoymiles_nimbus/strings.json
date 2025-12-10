@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hoymiles Nimbus",
+        "description": "Set up your Hoymiles Nimbus integration to monitor your solar system.",
+        "data": {
+          "username": "Username",
+          "password": "Password", 
+          "base_url": "Base URL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Hoymiles S-Cloud",
+      "invalid_auth": "Invalid username or password",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Hoymiles Nimbus Options",
+        "description": "Update your Hoymiles Nimbus configuration.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "base_url": "Base URL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Hoymiles S-Cloud",
+      "invalid_auth": "Invalid username or password", 
+      "unknown": "Unexpected error occurred"
+    }
+  }
+}
