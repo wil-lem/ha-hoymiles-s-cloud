@@ -51,18 +51,16 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     client = hass.data[DOMAIN][config_entry.entry_id]
 
     # Ensure the client is authenticated
-    # _LOGGER.debug("Logging into Hoymiles S-Cloud...")
-    _LOGGER.warning("Does this show up?")
     await hass.async_add_executor_job(client.login)
 
-    # _LOGGER.debug("Fetching stations from Hoymiles S-Cloud...")
+    _LOGGER.info("Fetching device data from Hoymiles S-Cloud...")
     stations = await hass.async_add_executor_job(client.select_by_page, "station")
 
     # Build system map with individual modules
     system = await hass.async_add_executor_job(client.map_system)
     await hass.async_add_executor_job(client.fill_system_data, system)
 
-    # _LOGGER.debug(f"Found {len(stations)} stations")
+    _LOGGER.info("Found %d station(s) in Hoymiles account", len(stations))
 
     entities = []
     
@@ -97,6 +95,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 entities.append(HoymilesSolarModuleVoltageSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
                 entities.append(HoymilesSolarModuleCurrentSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
 
+    _LOGGER.info("Created %d sensors for Hoymiles devices", len(entities))
     async_add_entities(entities)
 
 class HoymilesStationPowerSensor(SensorEntity):
