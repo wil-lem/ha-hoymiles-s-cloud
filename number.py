@@ -31,9 +31,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         sid = station.get("id")
         device_info = create_station_device_info(sid, station_name)
         name = device_info["name"]
+        
+        _LOGGER.info(f"[numbers] Creating station device: {name} (ID: {sid})")
+        _LOGGER.debug(f"[numbers] Station device info: {device_info}")
 
         entities.append(HoymilesMicroInverterLevel(client, name, sid, device_info))
+        _LOGGER.info(f"[numbers]   - Created entity: {name} Power Level (%)")
 
+    _LOGGER.info(f"[numbers] Total number entities created: {len(entities)}")
     async_add_entities(entities)
 
 class HoymilesMicroInverterLevel(NumberEntity):

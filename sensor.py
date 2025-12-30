@@ -74,29 +74,44 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         sid = station.get("id")
         device_info = create_station_device_info(sid, station_name)
         name = device_info["name"]
+        
+        _LOGGER.info(f"Creating station device: {name} (ID: {sid})")
+        _LOGGER.debug(f"Station device info: {device_info}")
 
         entities.append(HoymilesStationPowerSensor(client, name, sid, device_info))
+        _LOGGER.info(f"  - Created entity: {name} Current Power")
         entities.append(HoymilesStationEnergySensor(client, name, sid, device_info))
+        _LOGGER.info(f"  - Created entity: {name} Daily Energy")
         entities.append(HoymilesStationRatioSensor(client, name, sid, device_info))
+        _LOGGER.info(f"  - Created entity: {name} Performance Ratio")
 
     # Add individual solar module sensors
     for station in system:
         station_name = station.name
         sid = station.station_id
         station_identifier = f"hoymiles_station_{station.station_id}"
+        
+        _LOGGER.info(f"Processing station '{station_name}' with {len(station.microinverters)} microinverter(s)")
 
         for microinverter in station.microinverters:
+            _LOGGER.info(f"  Processing microinverter with {len(microinverter.modules)} module(s)")
             for module in microinverter.modules:
                 module_name = f"{station_name} Panel {module.id}"
                 
                 # Create device info for the solar module
                 module_device_info = create_module_device_info(module.id, station_identifier)
+                _LOGGER.info(f"  Creating solar module device: Solar Panel {module.id} (port {module.port})")
+                _LOGGER.debug(f"  Module device info: {module_device_info}")
                 
                 # Add power, voltage, and current sensors for each module
                 entities.append(HoymilesSolarModulePowerSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
+                _LOGGER.info(f"    - Created entity: {module_name} Power")
                 entities.append(HoymilesSolarModuleVoltageSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
+                _LOGGER.info(f"    - Created entity: {module_name} Voltage")
                 entities.append(HoymilesSolarModuleCurrentSensor(system_coordinator, module_name, station.station_id, module, module_device_info))
+                _LOGGER.info(f"    - Created entity: {module_name} Current")
 
+    _LOGGER.info(f"Total entities created: {len(entities)}")
     async_add_entities(entities)
 
 class HoymilesStationPowerSensor(SensorEntity):
