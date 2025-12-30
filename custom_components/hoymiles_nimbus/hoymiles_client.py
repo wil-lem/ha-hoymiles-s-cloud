@@ -74,7 +74,6 @@ class HoymilesClient:
             else:
                 raise Exception("Token is not set. Please authenticate first.")
 
-        _LOGGER.warning("API Request: POST %s with params: %s", url, payload)
         _LOGGER.debug(f"POST Request URL: {url}")
         _LOGGER.debug(f"POST Request Payload: {payload}")
         _LOGGER.debug(f"POST Request Headers: {headers}")
@@ -119,7 +118,6 @@ class HoymilesClient:
         else:
             raise Exception("Token is not set. Please authenticate first.")
 
-        _LOGGER.warning("API Request: PUT %s with params: %s", url, payload)
         _LOGGER.debug(f"PUT Request URL: {url}")
         _LOGGER.debug(f"PUT Request Payload: {payload}")
         _LOGGER.debug(f"PUT Request Headers: {headers}")
