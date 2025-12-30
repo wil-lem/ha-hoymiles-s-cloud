@@ -74,6 +74,7 @@ class HoymilesClient:
             else:
                 raise Exception("Token is not set. Please authenticate first.")
 
+        _LOGGER.warning("API Request: POST %s with params: %s", url, payload)
         _LOGGER.debug(f"POST Request URL: {url}")
         _LOGGER.debug(f"POST Request Payload: {payload}")
         _LOGGER.debug(f"POST Request Headers: {headers}")
@@ -89,18 +90,23 @@ class HoymilesClient:
             try:
                 if response_type == 'protobuf' and binary:
                     parser = ProtobufParser(response.content)
+                    _LOGGER.debug("API Response: %s - Protobuf data received", response.status_code)
                     return parser
                 response_data = response.json()
                 logging.debug(f"Response JSON: {response_data}")
+                _LOGGER.debug("API Response: %s - Success", response.status_code)
                 return response_data
             except ValueError:
                 logging.error("Failed to parse response as JSON")
+                _LOGGER.debug("API Response: %s - Failed to parse JSON", response.status_code)
                 return None
         except requests.exceptions.RequestException as e:
             logging.error(f"Request failed: {e}")
+            _LOGGER.warning("API Response: Request failed - %s", str(e))
             raise
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
+            _LOGGER.warning("API Response: Unexpected error - %s", str(e))
             raise
         
     def _put_request(self, uri, payload=None, headers=None):
@@ -113,6 +119,7 @@ class HoymilesClient:
         else:
             raise Exception("Token is not set. Please authenticate first.")
 
+        _LOGGER.warning("API Request: PUT %s with params: %s", url, payload)
         _LOGGER.debug(f"PUT Request URL: {url}")
         _LOGGER.debug(f"PUT Request Payload: {payload}")
         _LOGGER.debug(f"PUT Request Headers: {headers}")
@@ -124,9 +131,11 @@ class HoymilesClient:
         try:
             response_data = response.json()
             _LOGGER.debug(f"Response JSON: {response_data}")
+            _LOGGER.debug("API Response: %s - Success", response.status_code)
             return response_data
         except ValueError:
             _LOGGER.error("Failed to parse response as JSON")
+            _LOGGER.debug("API Response: %s - Failed to parse JSON", response.status_code)
             return None
 
     # ============================================================================
