@@ -150,11 +150,11 @@ class HoymilesClient:
 
     def login(self):
       """Authenticate with Hoymiles S-Cloud and retrieve a token."""
-      _LOGGER.info("Logging into Hoymiles S-Cloud for user: %s", self.username)
+      _LOGGER.warning("Logging into Hoymiles S-Cloud for user: %s", self.username)
       response_data = self.get_token(username=self.username, password=self.get_password_hash())
       if response_data and "data" in response_data and "token" in response_data["data"]:
           self.token = response_data["data"]["token"]
-          _LOGGER.info("Successfully authenticated with Hoymiles S-Cloud")
+          _LOGGER.warning("Successfully authenticated with Hoymiles S-Cloud")
           return True
       else:
           _LOGGER.error("Login failed: Token not found in response")
