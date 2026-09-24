@@ -13,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up Hoymiles binary sensors."""
-    client = hass.data[DOMAIN][config_entry.entry_id]
+    client = hass.data[DOMAIN][config_entry.entry_id]["client"]
 
     # Ensure the client is authenticated
     await hass.async_add_executor_job(client.login)

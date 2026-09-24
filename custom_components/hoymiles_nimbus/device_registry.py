@@ -26,21 +26,24 @@ def create_station_device_info(station_id: str, station_name: str = "Unknown") -
     }
 
 
-def create_module_device_info(module_id: str, station_device_identifier: str) -> dict:
+def create_module_device_info(module_id: str, station_device_identifier: str = None, via_device_id: str = None) -> dict:
     """
     Create consistent device info for a solar module.
     
     Args:
         module_id: The module ID from the API
-        station_device_identifier: The parent station device identifier
+        station_device_identifier: The parent station device identifier (legacy)
+        via_device_id: Optional device registry ID of the parent station device
         
     Returns:
         Dict containing device info for the module linked to its station
     """
-    return {
+    info = {
         "identifiers": {(f"hoymiles_module_{module_id}",)},
         "name": f"Solar Panel {module_id}",
         "manufacturer": "Hoymiles",
         "model": "Solar Module",
-        "via_device": (station_device_identifier,),
     }
+    if via_device_id:
+        info["via_device_id"] = via_device_id
+    return info
