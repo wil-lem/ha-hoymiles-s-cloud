@@ -48,7 +48,7 @@ class HoymilesSystemCoordinator:
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    client = hass.data[DOMAIN][config_entry.entry_id]
+    client = hass.data[DOMAIN][config_entry.entry_id]["client"]
 
     # Ensure the client is authenticated
     await hass.async_add_executor_job(client.login)
@@ -88,8 +88,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             for module in microinverter.modules:
                 module_name = f"{station_name} Panel {module.id}"
                 
-                # Create device info for the solar module
-                module_device_info = create_module_device_info(module.id, station_identifier)
+                # Use via_device_id instead of deprecated via_device (HA Core 2026.8+ deprecation)
+                device_map = hass.data[DOMAIN][config_entry.entry_id].get("device_map", {})
+                parent_id = device_map.get(station_identifier)
+                module_device_info = create_module_device_info(module.id, station_identifier, via_device_id=parent_id)
                 
                 # Add power, voltage, and current sensors for each module
                 entities.append(HoymilesSolarModulePowerSensor(system_coordinator, module_name, station.station_id, module, module_device_info))

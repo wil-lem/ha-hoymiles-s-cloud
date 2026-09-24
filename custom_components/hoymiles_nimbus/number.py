@@ -15,7 +15,7 @@ UPDATE_INTERVAL = timedelta(seconds=30)
 SCAN_INTERVAL = timedelta(seconds=30)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    client = hass.data[DOMAIN][config_entry.entry_id]
+    client = hass.data[DOMAIN][config_entry.entry_id]["client"]
 
     _LOGGER.debug("[numbers] Logging into Hoymiles S-Cloud...")
     await hass.async_add_executor_job(client.login)
