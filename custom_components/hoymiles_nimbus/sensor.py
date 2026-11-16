@@ -29,10 +29,12 @@ class HoymilesSystemCoordinator:
         # Update every 30 seconds to avoid too frequent API calls
         if (self._last_update is None or 
             (now - self._last_update).total_seconds() > 30):
-            
-            self._system = await self._hass.async_add_executor_job(self._client.map_system)
-            await self._hass.async_add_executor_job(self._client.fill_system_data, self._system)
-            self._last_update = now
+            try:
+                self._system = await self._hass.async_add_executor_job(self._client.map_system)
+                await self._hass.async_add_executor_job(self._client.fill_system_data, self._system)
+                self._last_update = now
+            except Exception as e:
+                _LOGGER.warning("Error updating Hoymiles system data: %s", e)
             
         return self._system
     
@@ -58,7 +60,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # Build system map with individual modules
     system = await hass.async_add_executor_job(client.map_system)
-    await hass.async_add_executor_job(client.fill_system_data, system)
+    try:
+        await hass.async_add_executor_job(client.fill_system_data, system)
+    except Exception as e:
+        _LOGGER.warning("Could not fill system data on setup: %s", e)
 
     _LOGGER.warning("Found %d station(s) in Hoymiles account", len(stations))
 

@@ -64,24 +64,28 @@ class HoymilesClient:
     # ============================================================================
 
 
-    def _post_request(self, uri, payload=None, headers=None, use_auth=True, binary=False, response_type='json'):
-        """Helper method to make POST requests."""
+    def _post_request(self, uri, payload=None, headers=None, use_auth=True, binary=False, response_type='json', retry_auth=True):
+        """Helper method to make POST requests with automatic token refresh."""
         url = f"{self.base_url}{uri}"
         if headers is None:
             headers = {"Content-Type": "application/json"}
         if use_auth:
-            if self.token:
-                headers["Authorization"] = self.token
-            else:
-                raise Exception("Token is not set. Please authenticate first.")
+            if not self.token:
+                self.login()
+            headers["Authorization"] = self.token
 
         _LOGGER.debug(f"POST Request URL: {url}")
         _LOGGER.debug(f"POST Request Payload: {payload}")
         _LOGGER.debug(f"POST Request Headers: {headers}")
         
-        response = requests.post(url, json=payload, headers=headers)
-        
         try:
+            response = requests.post(url, json=payload, headers=headers)
+            
+            if use_auth and retry_auth and response.status_code == 401:
+                _LOGGER.info("Received HTTP 401 from Hoymiles S-Cloud. Re-authenticating...")
+                self.login()
+                return self._post_request(uri, payload=payload, headers=None, use_auth=use_auth, binary=binary, response_type=response_type, retry_auth=False)
+
             _LOGGER.debug(f"Response Status Code: {response.status_code}")
             _LOGGER.debug(f"Response Headers: {response.headers}")
             response.raise_for_status()
@@ -93,6 +97,16 @@ class HoymilesClient:
                     _LOGGER.debug("API Response: %s - Protobuf data received", response.status_code)
                     return parser
                 response_data = response.json()
+
+                # Hoymiles API returns HTTP 200 with status != '0' and 'token error,please Re-login.' when token expires
+                if use_auth and retry_auth and isinstance(response_data, dict):
+                    msg = str(response_data.get('message', '')).lower()
+                    status = str(response_data.get('status', '0'))
+                    if (status in ('100', '401', 100, 401)) or (status != '0' and ('re-login' in msg or 'token error' in msg or 'unauthorized' in msg)):
+                        _LOGGER.warning("Hoymiles token expired (status %s: '%s'). Re-authenticating automatically...", status, msg)
+                        self.login()
+                        return self._post_request(uri, payload=payload, headers=None, use_auth=use_auth, binary=binary, response_type=response_type, retry_auth=False)
+
                 logging.debug(f"Response JSON: {response_data}")
                 _LOGGER.debug("API Response: %s - Success", response.status_code)
                 return response_data
@@ -109,33 +123,47 @@ class HoymilesClient:
             _LOGGER.warning("API Response: Unexpected error - %s", str(e))
             raise
         
-    def _put_request(self, uri, payload=None, headers=None):
-        """Helper method to make PUT requests."""
+    def _put_request(self, uri, payload=None, headers=None, retry_auth=True):
+        """Helper method to make PUT requests with automatic token refresh."""
         url = f"{self.base_url}{uri}"
         if headers is None:
             headers = {"Content-Type": "application/json"}
-        if self.token:
-            headers["Authorization"] = self.token
-        else:
-            raise Exception("Token is not set. Please authenticate first.")
+        if not self.token:
+            self.login()
+        headers["Authorization"] = self.token
 
         _LOGGER.debug(f"PUT Request URL: {url}")
         _LOGGER.debug(f"PUT Request Payload: {payload}")
         _LOGGER.debug(f"PUT Request Headers: {headers}")
 
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        
-        # Attempt to parse the response as JSON
         try:
-            response_data = response.json()
-            _LOGGER.debug(f"Response JSON: {response_data}")
-            _LOGGER.debug("API Response: %s - Success", response.status_code)
-            return response_data
-        except ValueError:
-            _LOGGER.error("Failed to parse response as JSON")
-            _LOGGER.debug("API Response: %s - Failed to parse JSON", response.status_code)
-            return None
+            response = requests.post(url, json=payload, headers=headers)
+            if retry_auth and response.status_code == 401:
+                _LOGGER.info("Received HTTP 401 from Hoymiles on PUT. Re-authenticating...")
+                self.login()
+                return self._put_request(uri, payload=payload, headers=None, retry_auth=False)
+            response.raise_for_status()
+            
+            # Attempt to parse the response as JSON
+            try:
+                response_data = response.json()
+                if retry_auth and isinstance(response_data, dict):
+                    msg = str(response_data.get('message', '')).lower()
+                    status = str(response_data.get('status', '0'))
+                    if (status in ('100', '401', 100, 401)) or (status != '0' and ('re-login' in msg or 'token error' in msg or 'unauthorized' in msg)):
+                        _LOGGER.warning("Hoymiles token expired on PUT (status %s: '%s'). Re-authenticating automatically...", status, msg)
+                        self.login()
+                        return self._put_request(uri, payload=payload, headers=None, retry_auth=False)
+                _LOGGER.debug(f"Response JSON: {response_data}")
+                _LOGGER.debug("API Response: %s - Success", response.status_code)
+                return response_data
+            except ValueError:
+                _LOGGER.error("Failed to parse response as JSON")
+                _LOGGER.debug("API Response: %s - Failed to parse JSON", response.status_code)
+                return None
+        except Exception as e:
+            _LOGGER.error(f"PUT request failed: {e}")
+            raise
 
     # ============================================================================
     # AUTHENTICATION METHODS

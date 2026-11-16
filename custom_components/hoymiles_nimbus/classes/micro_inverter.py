@@ -13,9 +13,13 @@ class Microinverter:
         self.modules.append(module)
 
     def set_data(self, data):
+        if not data or not isinstance(data, list) or not data[0]:
+            return
         main = data[0]
+        if not isinstance(main, list):
+            return
         times = [i for i in main[1:] if isinstance(i, str)]
-        module_data = [i for i in main[1:] if isinstance(i, list) and isinstance(i[1], list)]
+        module_data = [i for i in main[1:] if isinstance(i, list) and len(i) > 1 and isinstance(i[1], list)]
 
         # TODO There is more data in main[1:] that might be useful
 
