@@ -24,16 +24,17 @@ class Station:
         return all(dtu.get('connect', False) for dtu in self.dtus)
 
     def set_data(self, data):
+        if not data or not hasattr(data, 'get_compact'):
+            return
         tree = data.get_compact()  # Store the day's data for the station
+        if not tree or not isinstance(tree, list) or len(tree) < 3:
+            _LOGGER.warning("Data format for station ID %s is unexpected or empty: %s", self.station_id, tree)
+            return
         id = tree[0]
         date = tree[1]
 
         if id != self.station_id:
             _LOGGER.warning("Data station ID %s does not match Station ID %s", id, self.station_id)
-            return
-        
-        if len(tree) < 3:
-            _LOGGER.warning("Data format for station ID %s is unexpected: %s", self.station_id, tree)
             return
 
         for micro_data in tree[2:]:
