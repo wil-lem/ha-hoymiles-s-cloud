@@ -33,7 +33,12 @@ class SolarModule:
         if not self.data_points:
             return 0
         latest = self.data_points[-1]
-        return latest.watt if latest.watt is not None else 0
+        watt = latest.watt if latest.watt is not None else 0
+        if latest.volt is not None and latest.ampere is not None:
+            apparent = latest.volt * latest.ampere
+            if watt > max(50.0, apparent * 2.5 + 20.0):
+                return round(apparent, 1) if latest.ampere > 0.15 else 0
+        return watt
         # _LOGGER.debug("Setting data for module %s: %s", self.id, self.data_points)
 
     def getLatestDataPoint(self):
